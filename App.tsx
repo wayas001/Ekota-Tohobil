@@ -4,7 +4,7 @@ import {
   Plus, Wallet, TrendingUp, TrendingDown, Download, Trash2, 
   Sparkles, User, PieChart as PieChartIcon, BarChart3, Search, 
   CheckCircle2, AlertCircle, MessageSquare, LogOut, Settings, 
-  HeartHandshake, Send, Cloud, Users, Leaf, Coins, FileText, Printer, ChevronRight, Upload
+  HeartHandshake, Send, Cloud, Users, Leaf, Coins, FileText, Printer, ChevronRight, Upload, X, Grid3X3
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip,
@@ -53,6 +53,7 @@ const App: React.FC = () => {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isManagementOpen, setIsManagementOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [aiTips, setAiTips] = useState<AITip[]>([]);
   const [chatInput, setChatInput] = useState('');
@@ -62,8 +63,10 @@ const App: React.FC = () => {
   // --- REPORT STATE ---
   const [reportFilter, setReportFilter] = useState({
     month: MONTHS[new Date().getMonth()],
-    year: '2025'
+    year: '2026'
   });
+
+  const [summaryYear, setSummaryYear] = useState('2026');
 
   // --- FORM STATE ---
   const [txForm, setTxForm] = useState({
@@ -71,7 +74,7 @@ const App: React.FC = () => {
     amount: '500',
     type: 'Income' as TransactionType,
     month: MONTHS[new Date().getMonth()],
-    year: '2025',
+    year: '2026',
     date: new Date().toISOString().split('T')[0],
     category: 'Subscription',
     paymentMethod: 'Cash' as PaymentMethod
@@ -123,6 +126,23 @@ const App: React.FC = () => {
     }));
   }, [transactions]);
 
+  // Contribution Status Grid Calculation
+  const contributionGrid = useMemo(() => {
+    return config.members.map(member => {
+      const memberStatus: Record<string, boolean> = {};
+      MONTHS.forEach(month => {
+        const hasPaid = transactions.some(t => 
+          t.memberName === member && 
+          t.month === month && 
+          t.year === summaryYear && 
+          t.type === 'Income'
+        );
+        memberStatus[month] = hasPaid;
+      });
+      return { name: member, status: memberStatus };
+    });
+  }, [transactions, config.members, summaryYear]);
+
   // --- HANDLERS ---
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -162,14 +182,12 @@ const App: React.FC = () => {
         const memberIdx = parseInt(item.memberIdx);
         const memberName = config.members[memberIdx] || `Member ${memberIdx + 1}`;
         
-        // Map types from input JSON
         let method: PaymentMethod = 'Other';
         if (item.type === 'Bank Transfer') method = 'Bank Account';
         else if (item.type === 'Bkash') method = 'bKash';
         else if (item.type === 'Nagad') method = 'Nagad';
         else if (item.type === 'Cash') method = 'Cash';
 
-        // Format Date: YYYY-MM-DD
         const monthNum = (MONTHS.indexOf(item.month) + 1).toString().padStart(2, '0');
         const dayFormatted = item.day.toString().padStart(2, '0');
         const dateStr = `${item.year}-${monthNum}-${dayFormatted}`;
@@ -350,31 +368,35 @@ const App: React.FC = () => {
             </p>
           </div>
         </div>
-        <div className="flex gap-3 w-full md:w-auto">
+        <div className="flex flex-wrap gap-1.5 sm:gap-2 w-full md:w-auto items-center md:justify-end">
+          <button onClick={() => setIsSummaryOpen(true)} className="p-2 md:p-3 rounded-xl glass-card hover:bg-white/10 text-emerald-400 flex items-center gap-1.5 text-xs md:text-sm font-bold">
+            <Grid3X3 size={16} className="md:w-5 md:h-5" /> <span className="hidden sm:inline">Summary</span>
+          </button>
           {currentUser.role !== 'CUSTOMER' && (
-            <button onClick={() => setIsReportOpen(true)} className="p-3 rounded-xl glass-card hover:bg-white/10 text-emerald-400 flex items-center gap-2 text-sm font-bold">
-              <FileText size={20} /> Report
+            <button onClick={() => setIsReportOpen(true)} className="p-2 md:p-3 rounded-xl glass-card hover:bg-white/10 text-emerald-400 flex items-center gap-1.5 text-xs md:text-sm font-bold">
+              <FileText size={16} className="md:w-5 md:h-5" /> <span className="hidden sm:inline">Report</span>
             </button>
           )}
           {currentUser.role === 'SUPPORT' && (
-            <button onClick={() => setIsManagementOpen(true)} className="p-3 rounded-xl glass-card hover:bg-white/10 text-slate-300">
-              <Settings size={20} />
+            <button onClick={() => setIsManagementOpen(true)} className="p-2 md:p-3 rounded-xl glass-card hover:bg-white/10 text-slate-300">
+              <Settings size={16} className="md:w-5 md:h-5" />
             </button>
           )}
-          <button onClick={() => setIsChatOpen(!isChatOpen)} className="p-3 rounded-xl glass-card hover:bg-white/10 text-slate-300 relative">
-            <MessageSquare size={20} />
+          <button onClick={() => setIsChatOpen(!isChatOpen)} className="p-2 md:p-3 rounded-xl glass-card hover:bg-white/10 text-slate-300 relative">
+            <MessageSquare size={16} className="md:w-5 md:h-5" />
             {chatMessages.length > 0 && <span className="absolute top-0 right-0 w-2 h-2 bg-rose-500 rounded-full"></span>}
           </button>
-          <button onClick={exportData} className="px-4 py-2.5 rounded-xl glass-card text-sm font-medium hover:bg-white/10 flex items-center gap-2">
-            <Download size={18} /> Export
+          <button onClick={exportData} className="px-2.5 py-2 md:px-4 md:py-2.5 rounded-xl glass-card text-xs md:text-sm font-medium hover:bg-white/10 flex items-center gap-1.5">
+            <Download size={16} className="md:w-4 md:h-4" /> <span className="hidden sm:inline">Export</span>
           </button>
           {currentUser.role !== 'CUSTOMER' && (
-            <button onClick={() => setIsAddingTx(true)} className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-lg shadow-emerald-600/20">
-              <Plus size={18} className="inline mr-1" /> New Entry
+            <button onClick={() => setIsAddingTx(true)} className="px-3 py-2 md:px-6 md:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs md:text-sm font-semibold shadow-lg shadow-emerald-600/20 flex items-center gap-1">
+              <Plus size={16} className="md:w-4 md:h-4" /> <span className="hidden sm:inline">New Entry</span>
+              <span className="sm:hidden">New</span>
             </button>
           )}
-          <button onClick={handleLogout} className="p-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all">
-            <LogOut size={20} />
+          <button onClick={handleLogout} className="p-2 md:p-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all">
+            <LogOut size={16} className="md:w-5 md:h-5" />
           </button>
         </div>
       </header>
@@ -459,7 +481,7 @@ const App: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {transactions.map(tx => (
+                  {transactions.slice(0, 50).map(tx => (
                     <tr key={tx.id} className="hover:bg-white/[0.02] transition-colors group">
                       <td className="px-6 py-4">
                         <div className="font-bold text-slate-200">{tx.memberName}</div>
@@ -490,6 +512,11 @@ const App: React.FC = () => {
                   )}
                 </tbody>
               </table>
+              {transactions.length > 50 && (
+                <div className="p-4 text-center text-xs text-slate-500 uppercase font-black">
+                  Showing latest 50 records of {transactions.length}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -598,6 +625,71 @@ const App: React.FC = () => {
                 <button type="submit" className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-600/30 transition-all">Confirm Entry</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Summary Grid Modal */}
+      {isSummaryOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md" onClick={() => setIsSummaryOpen(false)}></div>
+          <div className="relative glass p-6 rounded-[2.5rem] w-full max-w-6xl animate-in zoom-in duration-200 shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-black flex items-center gap-3">
+                <Grid3X3 className="text-emerald-400" /> Contribution Status ({summaryYear})
+              </h2>
+              <div className="flex items-center gap-4">
+                <select 
+                  className="bg-[#0f172a] border border-white/10 rounded-xl px-4 py-2 text-white text-xs font-black uppercase"
+                  value={summaryYear}
+                  onChange={(e) => setSummaryYear(e.target.value)}
+                >
+                  {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+                <button onClick={() => setIsSummaryOpen(false)} className="text-slate-500 hover:text-white"><X size={24} /></button>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-auto rounded-2xl border border-white/5">
+              <table className="w-full text-left border-collapse min-w-[1000px]">
+                <thead className="sticky top-0 z-10 bg-[#1e293b]">
+                  <tr className="border-b border-white/10">
+                    <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 bg-[#1e293b] w-48">Member Name</th>
+                    {MONTHS.map(m => (
+                      <th key={m} className="px-2 py-3 text-[9px] font-black uppercase tracking-tighter text-center text-slate-400 min-w-[70px]">
+                        {m.substring(0, 3)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {contributionGrid.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-white/5 transition-colors">
+                      <td className="px-4 py-3 text-xs font-bold text-slate-200 sticky left-0 bg-[#0f172a]/80 backdrop-blur-sm z-0">
+                        {row.name}
+                      </td>
+                      {MONTHS.map(m => (
+                        <td key={m} className="px-2 py-3 text-center">
+                          {row.status[m] ? (
+                            <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400">
+                              <CheckCircle2 size={16} />
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-rose-500/10 text-rose-500/30">
+                              <div className="w-1.5 h-1.5 rounded-full bg-current"></div>
+                            </div>
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 flex gap-4 text-[10px] font-black uppercase tracking-widest">
+               <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-emerald-500/30"></div> Paid</div>
+               <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-rose-500/20"></div> Pending</div>
+            </div>
           </div>
         </div>
       )}

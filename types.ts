@@ -48,10 +48,26 @@ export const PAYMENT_METHODS: PaymentMethod[] = [
 ];
 
 export const INITIAL_MEMBERS = [
-  "Member 1", "Member 2", "Member 3", "Member 4", "Member 5",
-  "Member 6", "Member 7", "Member 8", "Member 9", "Member 10",
-  "Member 11", "Member 12", "Member 13", "Member 14", "Member 15",
-  "Member 16", "Member 17", "Member 18", "Member 19", "Member 20"
+  "Md. Abdur Rahman", 
+  "Md. Karim Hasan", 
+  "Md. Shafiqul Islam", 
+  "Md. Jahangir Alam", 
+  "Md. Rafiqul Islam", 
+  "Md. Mofizur Rahman", 
+  "Md. Nazmul Haque", 
+  "Md. Kamal Hossain", 
+  "Md. Saiful Islam", 
+  "Md. Arifur Rahman", 
+  "Md. Monirul Islam", 
+  "Md. Faruk Ahmed", 
+  "Md. Tanvir Ahmed", 
+  "Md. Mahbubur Rahman", 
+  "Md. Shahidul Islam", 
+  "Md. Nasir Uddin", 
+  "Md. Delwar Hossain", 
+  "Md. Tariqul Islam", 
+  "Md. Sohel Rana", 
+  "Md. Emdadul Haque"
 ];
 
 export interface AITip {
