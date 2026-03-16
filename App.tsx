@@ -567,7 +567,7 @@ const App: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <button type="button" onClick={() => setTxForm({...txForm, type: 'Income', amount: '500', category: 'Subscription'})} className={`py-3 rounded-2xl border-2 font-black uppercase tracking-widest text-[10px] transition-all ${txForm.type === 'Income' ? 'bg-emerald-500 border-emerald-400 text-white' : 'bg-white/5 border-white/10 text-slate-500'}`}>Collection</button>
                 <button type="button" onClick={() => setTxForm({...txForm, type: 'Expense', amount: '', category: 'General'})} className={`py-3 rounded-2xl border-2 font-black uppercase tracking-widest text-[10px] transition-all ${txForm.type === 'Expense' ? 'bg-rose-500 border-rose-400 text-white' : 'bg-white/5 border-white/10 text-slate-500'}`}>Expense</button>
-                <button type="button" onClick={() => setTxForm({...txForm, type: 'Investment', amount: '', category: 'Business'})} className={`py-3 rounded-2xl border-2 font-black uppercase tracking-widest text-[10px] transition-all col-span-2 ${txForm.type === 'Investment' ? 'bg-amber-500 border-amber-400 text-white' : 'bg-white/5 border-white/10 text-slate-500'}`}>Business Re-Investment</button>
+                <button type="button" onClick={() => setTxForm({...txForm, type: 'Investment', amount: '', category: 'Netlify'})} className={`py-3 rounded-2xl border-2 font-black uppercase tracking-widest text-[10px] transition-all col-span-2 ${txForm.type === 'Investment' ? 'bg-amber-500 border-amber-400 text-white' : 'bg-white/5 border-white/10 text-slate-500'}`}>Netlify Investment</button>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -582,18 +582,25 @@ const App: React.FC = () => {
                   )}
                 </div>
                 <div className="col-span-1">
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 ml-1">Category</label>
+                  <input className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white text-sm outline-none" placeholder="Category" value={txForm.category} onChange={e => setTxForm({...txForm, category: e.target.value})} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-1">
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 ml-1">Payment Method</label>
                   <select className="w-full bg-[#0f172a] border border-white/10 rounded-2xl px-4 py-3 text-white appearance-none text-sm" value={txForm.paymentMethod} onChange={e => setTxForm({...txForm, paymentMethod: e.target.value as PaymentMethod})}>
                     {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 ml-1">Amount (৳)</label>
                   <input type="number" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white font-black text-sm" value={txForm.amount} onChange={e => setTxForm({...txForm, amount: e.target.value})} />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 ml-1">Specific Date</label>
                   <input type="date" className="w-full bg-[#0f172a] border border-white/10 rounded-2xl px-4 py-3 text-white text-sm" value={txForm.date} onChange={e => {
