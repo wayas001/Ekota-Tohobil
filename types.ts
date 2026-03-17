@@ -1,7 +1,7 @@
 
-export type Role = 'SUPPORT' | 'ADMIN' | 'CO_AUDITOR' | 'CUSTOMER';
+export type Role = 'SUPPORT' | 'ADMIN' | 'CO_AUDITOR' | 'MEMBER';
 export type TransactionType = 'Income' | 'Expense' | 'Investment';
-export type PaymentMethod = 'Bank Account' | 'bKash' | 'Nagad' | 'Rocket' | 'Cash' | 'Other';
+export type PaymentMethod = 'Bank Transfer' | 'bKash' | 'Nagad' | 'Rocket' | 'Cash' | 'Other';
 
 export interface User {
   id: string;
@@ -27,13 +27,16 @@ export interface Transaction {
 export interface ChatMessage {
   id: string;
   sender: string;
+  senderRole: Role;
   text: string;
   timestamp: number;
+  isRead?: boolean;
 }
 
 export interface AppConfig {
   googleDriveLink: string;
   members: string[];
+  lastBackupDate?: number;
 }
 
 export const MONTHS = [
@@ -41,33 +44,33 @@ export const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-export const YEARS = ['2024', '2025', '2026', '2027', '2028'];
+export const YEARS = ['2024', '2025', '2026', '2027', '2028', '2029', '2030', '2031', '2032', '2033', '2034'];
 
 export const PAYMENT_METHODS: PaymentMethod[] = [
-  'Bank Account', 'bKash', 'Nagad', 'Rocket', 'Cash', 'Other'
+  'Bank Transfer', 'bKash', 'Nagad', 'Rocket', 'Cash', 'Other'
 ];
 
 export const INITIAL_MEMBERS = [
-  "Md. Abdur Rahman", 
-  "Md. Karim Hasan", 
-  "Md. Shafiqul Islam", 
-  "Md. Jahangir Alam", 
-  "Md. Rafiqul Islam", 
-  "Md. Mofizur Rahman", 
-  "Md. Nazmul Haque", 
-  "Md. Kamal Hossain", 
-  "Md. Saiful Islam", 
-  "Md. Arifur Rahman", 
-  "Md. Monirul Islam", 
-  "Md. Faruk Ahmed", 
-  "Md. Tanvir Ahmed", 
-  "Md. Mahbubur Rahman", 
-  "Md. Shahidul Islam", 
-  "Md. Nasir Uddin", 
-  "Md. Delwar Hossain", 
-  "Md. Tariqul Islam", 
-  "Md. Sohel Rana", 
-  "Md. Emdadul Haque"
+  "1. Al-Mamun",
+  "2. Al-Mamun-2",
+  "3. Wayas Ali",
+  "4. Abrar Sayan",
+  "5. Arafath",
+  "6. SR Shahin",
+  "7. Obaydull Mia",
+  "8. Shagor Mia",
+  "9. Al Shahareia",
+  "10. Miraj Hossain",
+  "11. Moinul Islam (Suvo)",
+  "12. Mamun Mia",
+  "13. Amanulla (Aman)",
+  "14. Monirul Islam",
+  "15. Imran",
+  "16. Tariqul Islam",
+  "17. Mazharul Islam (Saddam)",
+  "18. Mahdi Hasan (Mim)",
+  "19. Jasim Uddin",
+  "20. Abdullah"
 ];
 
 export interface AITip {

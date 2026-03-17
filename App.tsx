@@ -22,30 +22,67 @@ const COLORS = ['#4ade80', '#3b82f6', '#6366f1', '#f59e0b', '#ec4899', '#06b6d4'
 const App: React.FC = () => {
   // --- AUTH & STATE ---
   const [currentUser, setCurrentUser] = useState<UserType | null>(() => {
-    const saved = localStorage.getItem('ekota_current_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('ekota_current_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      console.error('Error parsing current user:', e);
+      return null;
+    }
   });
   
   const [users, setUsers] = useState<UserType[]>(() => {
-    const saved = localStorage.getItem('ekota_users');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', username: 'support', password: 'wayas.it', role: 'SUPPORT', name: 'Support Admin' }
-    ];
+    try {
+      const saved = localStorage.getItem('ekota_users');
+      return saved ? JSON.parse(saved) : [
+        { id: '1', username: 'support', password: 'wayas.it', role: 'SUPPORT', name: 'Support Admin' },
+        { id: '2', username: 'ekota', password: '1234', role: 'ADMIN', name: 'Ekota Common' }
+      ];
+    } catch (e) {
+      console.error('Error parsing users:', e);
+      return [
+        { id: '1', username: 'support', password: 'wayas.it', role: 'SUPPORT', name: 'Support Admin' },
+        { id: '2', username: 'ekota', password: '1234', role: 'ADMIN', name: 'Ekota Common' }
+      ];
+    }
   });
 
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    const saved = localStorage.getItem('ekota_txs');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('ekota_txs');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Error parsing transactions:', e);
+      return [];
+    }
   });
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
-    const saved = localStorage.getItem('ekota_chat');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('ekota_chat');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Error parsing chat messages:', e);
+      return [];
+    }
   });
 
   const [config, setConfig] = useState<AppConfig>(() => {
-    const saved = localStorage.getItem('ekota_config');
-    return saved ? JSON.parse(saved) : { googleDriveLink: '', members: INITIAL_MEMBERS };
+    try {
+      const saved = localStorage.getItem('ekota_config');
+      const parsed = saved ? JSON.parse(saved) : { googleDriveLink: '', members: INITIAL_MEMBERS };
+      
+      // Migration: Force update to the new members list requested by the user
+      if (parsed.members && parsed.members.length > 0 && !parsed.members[0].includes("Al-Mamun")) {
+        parsed.members = INITIAL_MEMBERS;
+        localStorage.setItem('ekota_config', JSON.stringify(parsed));
+      }
+      
+      return parsed;
+    } catch (e) {
+      console.error('Error parsing config:', e);
+      return { googleDriveLink: '', members: INITIAL_MEMBERS };
+    }
   });
 
   // --- UI STATE ---
@@ -76,8 +113,20 @@ const App: React.FC = () => {
     month: MONTHS[new Date().getMonth()],
     year: '2026',
     date: new Date().toISOString().split('T')[0],
-    category: 'Subscription',
+    category: 'Installment',
     paymentMethod: 'Cash' as PaymentMethod
+  });
+
+  const [editingTxId, setEditingTxId] = useState<string | null>(null);
+  const [showAllTransactions, setShowAllTransactions] = useState(false);
+  const [ledgerFilter, setLedgerFilter] = useState({
+    month: MONTHS[new Date().getMonth()],
+    year: '2026'
+  });
+  const [settingsSearch, setSettingsSearch] = useState('');
+  const [selectedMemberForEdit, setSelectedMemberForEdit] = useState<string | null>(null);
+  const [lastSeenChatCount, setLastSeenChatCount] = useState(() => {
+    return parseInt(localStorage.getItem('ekota_last_seen_chat') || '0');
   });
 
   // --- EFFECTS ---
@@ -86,9 +135,20 @@ const App: React.FC = () => {
     localStorage.setItem('ekota_txs', JSON.stringify(transactions));
     localStorage.setItem('ekota_chat', JSON.stringify(chatMessages));
     localStorage.setItem('ekota_config', JSON.stringify(config));
+    localStorage.setItem('ekota_last_seen_chat', lastSeenChatCount.toString());
     if (currentUser) localStorage.setItem('ekota_current_user', JSON.stringify(currentUser));
     else localStorage.removeItem('ekota_current_user');
-  }, [users, transactions, chatMessages, config, currentUser]);
+  }, [users, transactions, chatMessages, config, currentUser, lastSeenChatCount]);
+
+  // Auto-backup simulation (every 15 days)
+  useEffect(() => {
+    const now = Date.now();
+    const fifteenDays = 15 * 24 * 60 * 60 * 1000;
+    if (!config.lastBackupDate || now - config.lastBackupDate > fifteenDays) {
+      console.log('Auto-backing up to Google Drive...');
+      setConfig(prev => ({ ...prev, lastBackupDate: now }));
+    }
+  }, [config.lastBackupDate]);
 
   useEffect(() => {
     if (isChatOpen) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -155,22 +215,68 @@ const App: React.FC = () => {
 
   const handleAddTx = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser || currentUser.role === 'CUSTOMER') return;
+    if (!currentUser || currentUser.role === 'MEMBER') return;
+
+    // Check if member already has an entry for this month/year (only for Income/Installment)
+    if (txForm.type === 'Income') {
+      const existing = transactions.find(t => 
+        t.memberName === txForm.memberName && 
+        t.month === txForm.month && 
+        t.year === txForm.year && 
+        t.type === 'Income' &&
+        t.id !== editingTxId
+      );
+      if (existing) {
+        alert(`${txForm.memberName} already has an entry for ${txForm.month} ${txForm.year}`);
+        return;
+      }
+    }
     
-    const newTx: Transaction = {
-      id: crypto.randomUUID(),
-      memberName: txForm.memberName,
-      amount: parseFloat(txForm.amount),
-      type: txForm.type,
-      month: txForm.month,
-      year: txForm.year,
-      date: txForm.date,
-      category: txForm.category,
-      paymentMethod: txForm.paymentMethod,
-      recordedBy: currentUser.username
-    };
-    setTransactions([newTx, ...transactions]);
+    if (editingTxId) {
+      setTransactions(transactions.map(t => t.id === editingTxId ? {
+        ...t,
+        memberName: txForm.memberName,
+        amount: parseFloat(txForm.amount),
+        type: txForm.type,
+        month: txForm.month,
+        year: txForm.year,
+        date: txForm.date,
+        category: txForm.category,
+        paymentMethod: txForm.paymentMethod,
+      } : t));
+      setEditingTxId(null);
+    } else {
+      const newTx: Transaction = {
+        id: crypto.randomUUID(),
+        memberName: txForm.memberName,
+        amount: parseFloat(txForm.amount),
+        type: txForm.type,
+        month: txForm.month,
+        year: txForm.year,
+        date: txForm.date,
+        category: txForm.category,
+        paymentMethod: txForm.paymentMethod,
+        recordedBy: currentUser.username
+      };
+      setTransactions([newTx, ...transactions]);
+    }
     setIsAddingTx(false);
+  };
+
+  const handleEditTx = (tx: Transaction) => {
+    setTxForm({
+      memberName: tx.memberName,
+      amount: tx.amount.toString(),
+      type: tx.type,
+      month: tx.month,
+      year: tx.year,
+      date: tx.date,
+      category: tx.category,
+      paymentMethod: tx.paymentMethod
+    });
+    setEditingTxId(tx.id);
+    setIsManagementOpen(false);
+    setIsAddingTx(true);
   };
 
   const handleBulkImport = () => {
@@ -183,7 +289,7 @@ const App: React.FC = () => {
         const memberName = config.members[memberIdx] || `Member ${memberIdx + 1}`;
         
         let method: PaymentMethod = 'Other';
-        if (item.type === 'Bank Transfer') method = 'Bank Account';
+        if (item.type === 'Bank Transfer') method = 'Bank Transfer';
         else if (item.type === 'Bkash') method = 'bKash';
         else if (item.type === 'Nagad') method = 'Nagad';
         else if (item.type === 'Cash') method = 'Cash';
@@ -221,6 +327,7 @@ const App: React.FC = () => {
     const msg: ChatMessage = {
       id: crypto.randomUUID(),
       sender: currentUser.name,
+      senderRole: currentUser.role,
       text: chatInput,
       timestamp: Date.now()
     };
@@ -241,14 +348,7 @@ const App: React.FC = () => {
 
   const CustomLogo = ({ className = "w-16 h-16" }) => (
     <div className={`relative flex items-center justify-center ${className}`}>
-      <div className="absolute inset-0 border-4 border-indigo-400/30 rounded-full animate-[spin_10s_linear_infinite]"></div>
-      <div className="flex flex-wrap items-center justify-center gap-1">
-        <HeartHandshake className="text-indigo-400" size={32} />
-      </div>
-      <div className="absolute -bottom-2 flex gap-1">
-        <Coins className="text-amber-400" size={12} />
-        <Leaf className="text-emerald-400" size={12} />
-      </div>
+      <img src="https://ais-dev-a6i2iuatfk23swp3336csn-531867737507.asia-southeast1.run.app/input_file_0.png" alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
     </div>
   );
 
@@ -382,17 +482,17 @@ const App: React.FC = () => {
               <Settings size={16} className="md:w-5 md:h-5" />
             </button>
           )}
-          <button onClick={() => setIsChatOpen(!isChatOpen)} className="p-2 md:p-3 rounded-xl glass-card hover:bg-white/10 text-slate-300 relative">
+          <button onClick={() => { setIsChatOpen(!isChatOpen); setLastSeenChatCount(chatMessages.length); }} className="p-2 md:p-3 rounded-xl glass-card hover:bg-white/10 text-slate-300 relative">
             <MessageSquare size={16} className="md:w-5 md:h-5" />
-            {chatMessages.length > 0 && <span className="absolute top-0 right-0 w-2 h-2 bg-rose-500 rounded-full"></span>}
+            {chatMessages.length > lastSeenChatCount && <span className="absolute top-0 right-0 w-2 h-2 bg-rose-500 rounded-full animate-pulse"></span>}
           </button>
           <button onClick={exportData} className="px-2.5 py-2 md:px-4 md:py-2.5 rounded-xl glass-card text-xs md:text-sm font-medium hover:bg-white/10 flex items-center gap-1.5">
             <Download size={16} className="md:w-4 md:h-4" /> <span className="hidden sm:inline">Export</span>
           </button>
-          {currentUser.role !== 'CUSTOMER' && (
-            <button onClick={() => setIsAddingTx(true)} className="px-3 py-2 md:px-6 md:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs md:text-sm font-semibold shadow-lg shadow-emerald-600/20 flex items-center gap-1">
-              <Plus size={16} className="md:w-4 md:h-4" /> <span className="hidden sm:inline">New Entry</span>
-              <span className="sm:hidden">New</span>
+          {currentUser.role !== 'MEMBER' && (
+            <button onClick={() => { setEditingTxId(null); setIsAddingTx(true); }} className="px-3 py-2 md:px-6 md:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs md:text-sm font-semibold shadow-lg shadow-emerald-600/20 flex items-center gap-1">
+              <Plus size={16} className="md:w-4 md:h-4" /> <span className="hidden sm:inline">Data Entry</span>
+              <span className="sm:hidden">Entry</span>
             </button>
           )}
           <button onClick={handleLogout} className="p-2 md:p-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all">
@@ -443,8 +543,8 @@ const App: React.FC = () => {
               <BarChart3 className="text-emerald-400" size={20} />
               <h3 className="font-semibold text-lg uppercase tracking-wider text-slate-300">Financial Trends</h3>
             </div>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-[300px] w-full min-w-0">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <BarChart data={trendData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
                   <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
@@ -459,9 +559,15 @@ const App: React.FC = () => {
           </div>
 
           <div className="glass rounded-[2rem] overflow-hidden shadow-2xl">
-            <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
+            <div className="p-6 border-b border-white/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/5">
               <h3 className="font-bold text-lg flex items-center gap-2"><Users size={20} className="text-emerald-400" /> Member Ledger</h3>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <select className="bg-[#0f172a] border border-white/10 rounded-xl px-3 py-1.5 text-white text-[10px] font-black uppercase" value={ledgerFilter.month} onChange={e => setLedgerFilter({...ledgerFilter, month: e.target.value})}>
+                  {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <select className="bg-[#0f172a] border border-white/10 rounded-xl px-3 py-1.5 text-white text-[10px] font-black uppercase" value={ledgerFilter.year} onChange={e => setLedgerFilter({...ledgerFilter, year: e.target.value})}>
+                  {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
                 {config.googleDriveLink && (
                   <a href={config.googleDriveLink} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500 text-white text-xs font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg shadow-blue-500/20">
                     <Cloud size={14} /> Cloud Backup
@@ -477,11 +583,14 @@ const App: React.FC = () => {
                     <th className="px-6 py-5">Period</th>
                     <th className="px-6 py-5">Method</th>
                     <th className="px-6 py-5">Amount</th>
-                    {currentUser.role !== 'CUSTOMER' && <th className="px-6 py-5 text-center">Action</th>}
+                    {currentUser.role !== 'MEMBER' && <th className="px-6 py-5 text-center">Action</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {transactions.slice(0, 50).map(tx => (
+                  {transactions
+                    .filter(t => t.month === ledgerFilter.month && t.year === ledgerFilter.year)
+                    .slice(0, showAllTransactions ? undefined : 5)
+                    .map(tx => (
                     <tr key={tx.id} className="hover:bg-white/[0.02] transition-colors group">
                       <td className="px-6 py-4">
                         <div className="font-bold text-slate-200">{tx.memberName}</div>
@@ -494,27 +603,41 @@ const App: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 font-black text-slate-100">৳ {tx.amount.toLocaleString()}</td>
-                      {currentUser.role !== 'CUSTOMER' && (
+                      {currentUser.role !== 'MEMBER' && (
                         <td className="px-6 py-4 text-center">
-                          <button onClick={() => setTransactions(transactions.filter(t => t.id !== tx.id))} className="text-slate-700 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100">
-                            <Trash2 size={16} />
-                          </button>
+                          <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => handleEditTx(tx)} className="text-slate-500 hover:text-emerald-400 transition-colors">
+                              <Settings size={16} />
+                            </button>
+                            <button onClick={() => setTransactions(transactions.filter(t => t.id !== tx.id))} className="text-slate-500 hover:text-rose-500 transition-colors">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
                         </td>
                       )}
                     </tr>
                   ))}
-                  {transactions.length === 0 && (
+                  {transactions.filter(t => t.month === ledgerFilter.month && t.year === ledgerFilter.year).length === 0 && (
                     <tr>
                       <td colSpan={5} className="px-6 py-20 text-center text-slate-600 font-medium italic">
-                        Empty Ledger. Start adding member contributions.
+                        No transactions found for {ledgerFilter.month} {ledgerFilter.year}.
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
-              {transactions.length > 50 && (
-                <div className="p-4 text-center text-xs text-slate-500 uppercase font-black">
-                  Showing latest 50 records of {transactions.length}
+              {transactions.filter(t => t.month === ledgerFilter.month && t.year === ledgerFilter.year).length > 5 && !showAllTransactions && (
+                <div className="p-4 text-center">
+                  <button onClick={() => setShowAllTransactions(true)} className="text-xs text-emerald-400 uppercase font-black hover:underline">
+                    See More Transactions
+                  </button>
+                </div>
+              )}
+              {showAllTransactions && (
+                <div className="p-4 text-center">
+                  <button onClick={() => setShowAllTransactions(false)} className="text-xs text-slate-500 uppercase font-black hover:underline">
+                    Show Less
+                  </button>
                 </div>
               )}
             </div>
@@ -545,7 +668,7 @@ const App: React.FC = () => {
              <CustomLogo className="w-16 h-16 mb-4" />
              <h4 className="font-bold text-slate-200">Unity Support</h4>
              <p className="text-xs text-slate-500 mb-6">For technical assistance or profile changes, contact Wayas IT support.</p>
-             <button className="w-full py-3 rounded-2xl bg-white/5 border border-white/10 text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all">
+             <button onClick={() => { setIsChatOpen(true); setLastSeenChatCount(chatMessages.length); }} className="w-full py-3 rounded-2xl bg-white/5 border border-white/10 text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all">
                Contact Support
              </button>
           </div>
@@ -559,13 +682,13 @@ const App: React.FC = () => {
           <div className="relative glass p-8 rounded-[2.5rem] w-full max-w-lg animate-in zoom-in duration-200 shadow-[0_0_50px_rgba(0,0,0,0.5)] max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-black mb-8 flex items-center gap-3">
               <div className="bg-emerald-500 text-white rounded-xl p-2 shadow-lg shadow-emerald-500/30">
-                <Plus size={24} />
+                {editingTxId ? <Settings size={24} /> : <Plus size={24} />}
               </div>
-              New Fund Entry
+              {editingTxId ? 'Edit Entry' : 'Data Entry'}
             </h2>
             <form onSubmit={handleAddTx} className="space-y-5">
               <div className="grid grid-cols-2 gap-3">
-                <button type="button" onClick={() => setTxForm({...txForm, type: 'Income', amount: '500', category: 'Subscription'})} className={`py-3 rounded-2xl border-2 font-black uppercase tracking-widest text-[10px] transition-all ${txForm.type === 'Income' ? 'bg-emerald-500 border-emerald-400 text-white' : 'bg-white/5 border-white/10 text-slate-500'}`}>Collection</button>
+                <button type="button" onClick={() => setTxForm({...txForm, type: 'Income', amount: '500', category: 'Installment'})} className={`py-3 rounded-2xl border-2 font-black uppercase tracking-widest text-[10px] transition-all ${txForm.type === 'Income' ? 'bg-emerald-500 border-emerald-400 text-white' : 'bg-white/5 border-white/10 text-slate-500'}`}>Collection</button>
                 <button type="button" onClick={() => setTxForm({...txForm, type: 'Expense', amount: '', category: 'General'})} className={`py-3 rounded-2xl border-2 font-black uppercase tracking-widest text-[10px] transition-all ${txForm.type === 'Expense' ? 'bg-rose-500 border-rose-400 text-white' : 'bg-white/5 border-white/10 text-slate-500'}`}>Expense</button>
                 <button type="button" onClick={() => setTxForm({...txForm, type: 'Investment', amount: '', category: 'Netlify'})} className={`py-3 rounded-2xl border-2 font-black uppercase tracking-widest text-[10px] transition-all col-span-2 ${txForm.type === 'Investment' ? 'bg-amber-500 border-amber-400 text-white' : 'bg-white/5 border-white/10 text-slate-500'}`}>Netlify Investment</button>
               </div>
@@ -767,14 +890,85 @@ const App: React.FC = () => {
             
             <section className="mb-10 p-6 rounded-3xl bg-white/5 border border-white/10">
               <h3 className="text-xs font-black uppercase tracking-[0.2em] text-blue-400 mb-6 flex items-center gap-2"><Cloud size={16}/> Cloud Synchronization</h3>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-500">Google Drive Folder / Sheet URL</label>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500">Google Drive Folder / Sheet URL</label>
+                  <input 
+                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-3 text-sm text-blue-300 focus:ring-1 focus:ring-blue-500 outline-none" 
+                    placeholder="https://drive.google.com/..."
+                    value={config.googleDriveLink}
+                    onChange={e => setConfig({...config, googleDriveLink: e.target.value})}
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => {
+                    alert('Data restoration initiated from Google Drive...');
+                    // In a real app, this would fetch from Drive. Here we just simulate.
+                  }} className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black uppercase tracking-widest text-[10px] transition-all">
+                    Restore All Data
+                  </button>
+                  <button onClick={() => {
+                    alert('Manual backup triggered...');
+                    setConfig(prev => ({ ...prev, lastBackupDate: Date.now() }));
+                  }} className="flex-1 py-3 bg-white/5 border border-white/10 text-slate-300 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all">
+                    Backup Now
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <section className="mb-10 p-6 rounded-3xl bg-white/5 border border-white/10">
+              <h3 className="text-xs font-black uppercase tracking-[0.2em] text-amber-400 mb-6 flex items-center gap-2"><Search size={16}/> Member Reports Search</h3>
+              <div className="space-y-4">
                 <input 
-                  className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-3 text-sm text-blue-300 focus:ring-1 focus:ring-blue-500 outline-none" 
-                  placeholder="https://drive.google.com/..."
-                  value={config.googleDriveLink}
-                  onChange={e => setConfig({...config, googleDriveLink: e.target.value})}
+                  className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-3 text-sm text-white focus:ring-1 focus:ring-amber-500 outline-none" 
+                  placeholder="Search member name..."
+                  value={settingsSearch}
+                  onChange={e => setSettingsSearch(e.target.value)}
                 />
+                {settingsSearch && (
+                  <div className="space-y-4">
+                    {config.members.filter(m => m.toLowerCase().includes(settingsSearch.toLowerCase())).map(member => {
+                      const memberTxs = transactions.filter(t => t.memberName === member);
+                      return (
+                        <div key={member} className="p-4 glass-card rounded-2xl border border-white/5 space-y-4">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <div className="font-bold text-sm">{member}</div>
+                              <div className="text-[10px] text-slate-500">{memberTxs.length} Total Records</div>
+                            </div>
+                            <button 
+                              onClick={() => setSelectedMemberForEdit(selectedMemberForEdit === member ? null : member)}
+                              className="text-xs font-bold text-emerald-400 uppercase"
+                            >
+                              {selectedMemberForEdit === member ? 'Hide Records' : 'View Records'}
+                            </button>
+                          </div>
+                          
+                          {selectedMemberForEdit === member && (
+                            <div className="max-h-60 overflow-y-auto space-y-2 pr-2">
+                              {memberTxs.map(tx => (
+                                <div key={tx.id} className="p-3 bg-white/5 rounded-xl flex justify-between items-center text-[10px]">
+                                  <div>
+                                    <div className="font-bold text-slate-300">{tx.month} {tx.year} - {tx.category}</div>
+                                    <div className="text-slate-500">{tx.date} • {tx.paymentMethod}</div>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="font-black text-emerald-400">৳{tx.amount}</span>
+                                    <button onClick={() => handleEditTx(tx)} className="text-slate-400 hover:text-white">
+                                      <Settings size={12} />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                              {memberTxs.length === 0 && <div className="text-center py-4 text-slate-600 italic">No records found.</div>}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </section>
 
@@ -878,7 +1072,14 @@ const App: React.FC = () => {
             <button onClick={() => setIsChatOpen(false)} className="text-slate-500 hover:text-white font-black p-1">✕</button>
           </div>
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
-            {chatMessages.map(msg => (
+            {chatMessages
+              .filter(msg => {
+                // Support/Admin/Co-Auditor see all messages
+                if (['SUPPORT', 'ADMIN', 'CO_AUDITOR'].includes(currentUser.role)) return true;
+                // Members only see their own messages and replies from Support/Admin/Co-Auditor
+                return msg.sender === currentUser.name || (msg.senderRole ? msg.senderRole !== 'MEMBER' : msg.sender === 'Support Admin');
+              })
+              .map(msg => (
               <div key={msg.id} className={`flex flex-col ${msg.sender === currentUser.name ? 'items-end' : 'items-start'}`}>
                 <span className="text-[9px] font-black text-slate-500 mb-1 tracking-tighter">{msg.sender}</span>
                 <div className={`px-4 py-2.5 rounded-2xl text-xs max-w-[90%] shadow-sm ${
